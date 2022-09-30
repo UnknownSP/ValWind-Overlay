@@ -9,10 +9,12 @@ from turtle import left
 import cv2
 import numpy as np
 import socketio
+import eventlet
 import win32con
 import win32gui
 import win32ui
 
+socket_io = socketio.Client()
 #window = win32gui.FindWindow(None, "VALORANT  ")
 #if window == NULL or window == 0:
 #    print("No Window Found")
@@ -248,7 +250,9 @@ def get_HitPointFrame(image, left_remain_agents, right_remain_agents):
                         cropped_HP_red.append(0.0)
                     break
             #print(cropped_HP_red)
-            left_HP_frame.append(cropped_HP_red)
+            left_HP_frame.append(cropped_HP_red) 
+            x_start = x_start + x_between_agent_width
+            x_end = x_start + x_agent_width
             continue
         cropped_mask_Upper = image[mask_Upper_lower:mask_Upper_higher,x_start:x_end]
         cropped_mask_Under = image[mask_Under_lower:mask_Under_higher,x_start:x_end]
@@ -326,7 +330,7 @@ def get_LiveAgentsFrame(image_gray):
     #cv2.destroyAllWindows()
 
 #WindowCapture("??????") # 部分一致
-left_play_agents = ["Viper","Skye","Jett","Sova","Reyna"]
+left_play_agents = ["Astra","Fade","Skye","Raze","Chamber"]
 right_play_agents = ["Phoenix","Sova","Killjoy","Brimstone","Jett"]
 window_data = get_ActiveWindow("???????")
 left_agents_template, right_agents_template, left_mark_template, right_mark_template = generate_templates(left_play_agents, right_play_agents)
@@ -371,64 +375,81 @@ AGENTS_UPDATE_COUNT = 8
 HP_UPDATE_COUNT = 5
 left_remain_agents = 0
 right_remain_agents = 0
-while True:
-    window_image = get_WindowImage(window_data)
-    #window_image = testImageCapture("main25")
-    if window_image is NULL:
-        continue
-        #exit()
-    window_image_gray = cv2.cvtColor(window_image, cv2.COLOR_BGR2GRAY)
-    if check_loadImage(window_image_gray, left_mark_template, right_mark_template) == False:
-        continue
-        #exit()
-    #window_image = testImageCapture()
-    #cv2.destroyAllWindows()
-    #cv2.imshow("image", window_image)
-    #v2.waitKey(1)
-    left_live_agents_raw, right_live_agents_raw = get_LiveAgentsFrame(window_image_gray)
-    left_live_agents_get, _left_none, right_live_agents_get, _right_none = get_LiveAgents(left_agents_template,left_live_agents_raw,left_play_agents,right_agents_template,right_live_agents_raw,right_play_agents)
-    
-    _left_agents_update_flag = False
-    for i in range(0,5):
-        if left_live_agents_get[i] != left_live_agents_decided[i]:
-            _left_agents_update_flag = True
-    
-    if _left_agents_update_flag:
-        left_live_agents_update_count += 1
-        if left_live_agents_update_count >= AGENTS_UPDATE_COUNT:
-            left_live_agents_decided = left_live_agents_get
-            left_live_agents_update_count = 0 
-            #print("Agents : "+str(left_live_agents_decided), end="")
-            #print("HP : "+str(left_HP_decided))
 
-    left_remain_agents = 5 - left_live_agents_decided.count(0)
-    left_HP_frame = get_HitPointFrame(window_image, left_remain_agents, right_remain_agents)
-    left_HP_calc = get_HitPoint(left_HP_frame, "aaa")
-    #print(left_HP_frame)
-    #print(left_HP)
-    for i in range(0,5):
-        if left_HP_calc[i] != -1 and (left_HP_calc[i] != left_HP_decided[i]):
-            left_HP_update_count[i] += 1
-            if left_HP_update_count[i] >= HP_UPDATE_COUNT:
-                left_HP_decided[i] = left_HP_calc[i]
-                left_HP_update_count[i] = 0
-                if (i >= 5-left_remain_agents) and (left_HP_decided[i] == 0):
-                    left_HP_decided[i] = 1
-                #if not _left_agents_update_flag:
-                #    print("Agents : "+str(left_live_agents_decided), end="")
-                #    print("HP : "+str(left_HP_decided))
-    for i in range(0,5):
-        if i < 5-left_remain_agents:
-            left_HP_decided[i] = 0
+def start_Process():
+    while True:
+        window_image = get_WindowImage(window_data)
+        #window_image = testImageCapture("main25")
+        if window_image is NULL:
+            continue
+            #exit()
+        window_image_gray = cv2.cvtColor(window_image, cv2.COLOR_BGR2GRAY)
+        if check_loadImage(window_image_gray, left_mark_template, right_mark_template) == False:
+            continue
+            #exit()
+        #window_image = testImageCapture()
+        #cv2.destroyAllWindows()
+        #cv2.imshow("image", window_image)
+        #v2.waitKey(1)
+        left_live_agents_raw, right_live_agents_raw = get_LiveAgentsFrame(window_image_gray)
+        left_live_agents_get, _left_none, right_live_agents_get, _right_none = get_LiveAgents(left_agents_template,left_live_agents_raw,left_play_agents,right_agents_template,right_live_agents_raw,right_play_agents)
 
-    if not _left_agents_update_flag:
-        print("Agents : "+str(left_live_agents_decided), end="")
-        print("HP : "+str(left_HP_decided))
+        _left_agents_update_flag = False
+        for i in range(0,5):
+            if left_live_agents_get[i] != left_live_agents_decided[i]:
+                _left_agents_update_flag = True
 
-    #if _left_none:
-    #    i += 1
-    #    cv2.imwrite("window_image"+str(i)+".png",window_image)
+        if _left_agents_update_flag:
+            left_live_agents_update_count += 1
+            if left_live_agents_update_count >= AGENTS_UPDATE_COUNT:
+                left_live_agents_decided = left_live_agents_get
+                left_live_agents_update_count = 0 
+                #print("Agents : "+str(left_live_agents_decided), end="")
+                #print("HP : "+str(left_HP_decided))
 
+        left_remain_agents = 5 - left_live_agents_decided.count(0)
+        left_HP_frame = get_HitPointFrame(window_image, left_remain_agents, right_remain_agents)
+        left_HP_calc = get_HitPoint(left_HP_frame, "aaa")
+        #print(left_HP_frame)
+        #print(left_HP)
+        for i in range(0,5):
+            if left_HP_calc[i] != -1 and (left_HP_calc[i] != left_HP_decided[i]):
+                left_HP_update_count[i] += 1
+                if left_HP_update_count[i] >= HP_UPDATE_COUNT:
+                    left_HP_decided[i] = left_HP_calc[i]
+                    left_HP_update_count[i] = 0
+                    if (i >= 5-left_remain_agents) and (left_HP_decided[i] == 0):
+                        left_HP_decided[i] = 1
+                    #if not _left_agents_update_flag:
+                    #    print("Agents : "+str(left_live_agents_decided), end="")
+                    #    print("HP : "+str(left_HP_decided))
+        for i in range(0,5):
+            if i < 5-left_remain_agents:
+                left_HP_decided[i] = 0
+
+        if not _left_agents_update_flag:
+            print("Agents : "+str(left_live_agents_decided), end="")
+            print("HP : "+str(left_HP_decided))
+
+        #if _left_none:
+        #    i += 1
+        #    cv2.imwrite("window_image"+str(i)+".png",window_image)
+
+def start_test():
+    while True:
+        start = time.time()
+        print("test")
+        socket_io.emit("test","test")
+        end = time.time()
+        if end-start < 1:
+            time.sleep(1-(end-start))
+
+
+if __name__ == "__main__":
+
+    socket_io.connect('http://127.0.0.1:4445/')
+    task = socket_io.start_background_task(start_test)
+    socket_io.wait()
 
 #testImageCapture()
 #left_play_agents = ["Phoenix","Raze","Reyna","Sage","Yoru"]
